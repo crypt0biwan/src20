@@ -5,10 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SRC20 Dashboard</title>
     <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
+
+    <style type="text/css">
+        .info-btn { cursor: pointer;}
+    </style>
 </head>
     <body>
         <div class="container mb-3">
-            <h3>SRC20 Dashboard</h3>
+            <h3 id="header">SRC20 Dashboard</h3>
 
             <hr />
 
@@ -44,12 +49,13 @@
         <script src="js/tablesort.min.js"></script>
         <script src="js/tablesort.number.min.js"></script>
         <script>
-            // const stamp_json = 'json/stamp.json'
-            const stamp_json = 'https://stampchain.io/stamp.json'
+            // const stamp_json = 'json/src20.json'
+            const stamp_json = 'https://stampchain.io/api/src20'
 
             let src20s = []
             let tokens = []
 
+            const header = document.querySelector('#header')
             const result = document.querySelector('#result')
 
             const b64_to_utf8 = str => decodeURIComponent(escape(window.atob(str)))
@@ -64,13 +70,13 @@
                             
             const get_stamps = () => fetch(`${stamp_json}`).then((response) => response.json())
 
-            const get_mints = ticker => _.filter(src20s, src20 => src20.tick.toUpperCase() === ticker.toUpperCase() && src20.op === 'mint')
+            const get_mints = ticker => _.filter(_.orderBy(src20s, ['tx_index'], ['asc']), src20 => src20.tick.toUpperCase() === ticker.toUpperCase() && src20.op === 'mint')
 
             const get_amount_minted = tick => {
                 const token = _.filter(tokens, token => token.tick.toUpperCase() === tick.toUpperCase())[0]
 
                 const {
-                    stamp: tokenStamp,
+                    tx_index: tokenStamp,
                     max,
                     lim,
                 } = token
@@ -81,14 +87,11 @@
 
                 _.each(get_mints(tick), mint => {
                     let {
-                        stamp: mintStamp,
+                        tx_index: mintStamp,
                         amt,
-                        keyburn,
-                        locked,
-                        quantity,
                     } = mint
 
-                    if(tokenStamp < mintStamp && keyburn && locked && quantity === 0) {
+                    if(tokenStamp < mintStamp) {
                         if(_.parseInt(amt) > _.parseInt(lim)) {
                             amt = _.parseInt(lim)
                         }
@@ -106,6 +109,130 @@
                 }
             }
 
+            const get_mints_html = (tick) => {
+                const token = _.filter(tokens, token => token.tick.toUpperCase() === tick.toUpperCase())[0]
+
+                const {
+                    tx_index: tokenStamp,
+                    max,
+                    lim,
+                } = token
+
+                let htmlValidTableStart = 
+                    `<table id="tokens" class="table table-striped table-sm mb-5" style="text-align: left; font-weight: 400;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">ID</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Tx index</th>
+                                <th scope="col">Creator</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">Amount</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">Total</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">%</th>
+                            </tr>
+                        </thead>
+                    <tbody>`
+
+                let htmlInvalidTableStart = 
+                    `<table id="tokens" class="table table-striped mb-5" style="text-align: left;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">ID</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Tx index</th>
+                                <th scope="col">Creator</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">Amount</th>
+                            </tr>
+                        </thead>
+                    <tbody>`         
+
+                let htmlValid = ``
+                let htmlInvalid = ``
+                let total_tokens = 0
+
+                _.each(get_mints(tick), (mint, index) => {
+                    const {
+                        tx_index: mintStamp,
+                        op,
+                        block_index,
+                        creator,
+                        amt,
+                        tx_hash,
+                        p
+                    } = mint
+
+                    if(tokenStamp < mintStamp) {
+                        let newAmount = false
+
+                        if(_.parseInt(amt) > _.parseInt(lim)) {
+                            newAmount = _.parseInt(lim)
+                        }
+
+                        if(total_tokens + _.parseInt(amt) <= max) {
+                            total_tokens += newAmount ? newAmount : _.parseInt(amt)
+
+                            htmlValid += `<tr>
+                                <td style="text-align: right; padding-right: 20px;">
+                                    ${formatValue(index + 1)}
+                                </td>
+                                <td style="text-align: right; padding-right: 20px;">
+                                    ${formatValue(mintStamp)}
+                                </td>
+                                <td>
+                                    ${creator}
+                                </td>
+                                <td style="text-align: right; padding-right: 50px; white-space: nowrap;">
+                                    ${newAmount ? `<del>${formatValue(amt)}</del> <i class="bi bi-arrow-right-circle-fill"></i> ${formatValue(newAmount)}` : formatValue(amt)}
+                                </td>
+                                <td style="text-align: right; padding-right: 50px;">
+                                    ${formatValue(total_tokens)}
+                                </td>
+                                <td style="text-align: right; padding-right: 50px;">
+                                    ${parseFloat(100 / max * total_tokens).toFixed(2)}&nbsp;%
+                                </td>
+                            </tr>`
+
+                        } else {
+                            htmlInvalid += `<tr>
+                                <td style="text-align: right; padding-right: 20px;">
+                                    ${formatValue(index + 1)}
+                                </td>
+                                <td style="text-align: right; padding-right: 20px;">
+                                    ${formatValue(mintStamp)}
+                                </td>
+                                <td>
+                                    ${creator}
+                                </td>
+                                <td style="text-align: right; padding-right: 50px;">
+                                    ${formatValue(amt)}
+                                </td>
+                            </tr>`
+                        }
+
+                    }
+                })
+                
+                let htmlTableEnd =
+                    `</tbody>
+                    </table>`
+
+                let html = `<h5 style="text-align: left;">Valid mints <i class="bi bi-check-circle-fill"></i></h5>
+                
+                    ${htmlValidTableStart}
+                    ${htmlValid}
+                    ${htmlTableEnd}
+                `
+
+                if(htmlInvalid) {
+                    html += `<h5 style="text-align: left;">Invalid mints <i class="bi bi-x-circle-fill"></i></h5>
+
+                        ${htmlInvalidTableStart}
+                        ${htmlInvalid}
+                        ${htmlTableEnd}
+                    `   
+                }
+                
+                return html
+            }
+
             const parse_tokens = () => {
                 _.each(_.filter(src20s, src20 => src20.op === 'deploy'), src20 => {
                     const {
@@ -120,39 +247,6 @@
                 })
             }
 
-            const parse_src20s = stamps => {
-                _.each(stamps, entry => {
-                    try {
-                        const {
-                            creator,
-                            stamp,
-                            cpid,
-                            keyburn,
-                            locked,
-                            quantity,
-                            stamp_base64,
-                        } = entry                    
-                        
-                        const decoded = b64_to_utf8(stamp_base64)
-                        const json = JSON.parse(decoded)
-
-                        if(json.p === 'src-20') {
-                            src20s.push({
-                                ...json,
-                                creator,
-                                cpid,
-                                stamp,
-                                keyburn,
-                                locked,
-                                quantity
-                            })
-                        }
-                    } catch(e) {
-                        // console.log(e)
-                    }
-                })
-            }
-
             const get_table_html = () => {
                 let html = 
                     `<table id="tokens" class="table table-striped mb-5">
@@ -161,10 +255,10 @@
                                 <th style="text-align: right; padding-right: 20px;" scope="col">ID</th>
                                 <th style="text-align: right; padding-right: 50px;" scope="col">Stamp</th>
                                 <th scope="col">Tick</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">Max</th>
                                 <th style="text-align: right; padding-right: 50px;" scope="col">Lim</th>
                                 <th style="text-align: right; padding-right: 50px;" scope="col">Mints</th>
                                 <th style="text-align: right; padding-right: 50px;" scope="col">Total</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">Max</th>
                                 <th style="text-align: right; padding-right: 50px;" scope="col">%</th>
                             </tr>
                         </thead>
@@ -172,7 +266,7 @@
 
                 _.each(tokens, (token, index) => {
                     const {
-                        stamp,
+                        tx_index: stamp,
                         tick,
                         max,
                         lim
@@ -195,19 +289,44 @@
                             ${tick}
                         </td>
                         <td style="text-align: right; padding-right: 50px;">
-                            ${formatValue(max)}
-                        </td>
-                        <td style="text-align: right; padding-right: 50px;">
                             ${formatValue(lim)}
                         </td>
-                        <td style="text-align: right; padding-right: 50px;">
+                        <td style="text-align: right; padding-right: 50px; white-space: nowrap;">
                             ${formatValue(amount_of_mints)}
+                            
+                            <span class="text-primary">
+                                <i class="info-btn bi bi-info-circle-fill" data-bs-toggle="modal" data-bs-target="#modal${index}"></i>
+                            </span>
+
+                            <div class="modal fade" id="modal${index}" tabindex="-1" aria-labelledby="modal${tick}" aria-hidden="true" style="display: none;">
+                                <div class="modal-dialog modal-xl">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h1 class="modal-title fs-4" id="gridModalLabel">${tick} mint info</h1>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        
+                                        <div class="modal-body">
+                                            <div>
+                                                ${get_mints_html(tick)}
+                                            </div>
+                                        </div>
+
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </td>
                         <td style="text-align: right; padding-right: 50px;">
                             ${formatValue(total_tokens)}
                         </td>
                         <td style="text-align: right; padding-right: 50px;">
-                            ${formatValue(100 / max * total_tokens, 2)} %
+                            ${formatValue(max)}
+                        </td>
+                        <td style="text-align: right; padding-right: 50px;">
+                            ${formatValue(100 / max * total_tokens, 2)}&nbsp;%
                         </td>
                     </tr>`
                 })
@@ -220,15 +339,15 @@
             }
 
             const init = async () => {
-                const stamps = await get_stamps()
-                const stamps_length = stamps.length
+                src20s = _.orderBy((await get_stamps()), ['tx_index'], ['asc'])
 
-                parse_src20s(stamps)
                 parse_tokens()
 
                 result.innerHTML = get_table_html()
 
                 new Tablesort(document.getElementById('tokens'))
+
+                get_mints_html('OBI')
             }
 
             init()
