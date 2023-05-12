@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SRC20 Dashboard</title>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+</head>
+    <body>
+        <div class="container mb-3">
+            <h3>SRC20 Dashboard</h3>
+
+            <hr />
+
+            <p>
+                Current conditions:
+                <ul>
+                    <li>Amounts > 420k fallback to 420k per mint</li>
+                    <li>Casing doesn't matter, so KeViN, KEVIN and Kevin are all valid</li>
+                    <li>Stamp has to have: keyburn = true, locked = true, quantity = 0</li>
+                    <li>Mints after the deploy are valid, mints before deploy aren't</li>
+                </ul>
+            </p>
+
+            <hr />
+        </div>
+
+        <div class="container mb-5">
+            <div id="result">
+                <img src="img/loading.gif" title="loading.." style="display: block; margin: 0 auto;"/>
+            </div>
+        </div>
+        
+        <div class="container text-center">
+            <footer class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top">
+                <div class="col-md-12 d-flex align-items-center">
+                    <span class="text-muted">Made by obi, source: <a target="_blank" href="https://github.com/crypt0biwan/src20-dashboard">github</a>, contact: <a target="_blank" href="https://twitter.com/crypt0biwan">twitter</a>, donations: 1obiAgwKHdqrv135uzHH81Pz7MGG1sqvw</span>
+                </div>
+            </footer>
+        </div>
+
+        <script src="js/bootstrap.bundle.min.js"></script>
+        <script src="js/lodash.min.js"></script>
+        <script src="js/tablesort.min.js"></script>
+        <script src="js/tablesort.number.min.js"></script>
+        <script>
+            // const stamp_json = 'json/stamp.json'
+            const stamp_json = 'https://stampchain.io/stamp.json'
+
+            let src20s = []
+            let tokens = []
+
+            const result = document.querySelector('#result')
+
+            const b64_to_utf8 = str => decodeURIComponent(escape(window.atob(str)))
+
+            const formatValue = (value, decimals = 0, style = 'decimal') =>
+                new Intl.NumberFormat('en-US', {
+                    style,
+                    currency: 'USD',
+                    minimumFractionDigits: decimals,
+                    maximumFractionDigits: decimals,
+                }).format(value)
+                            
+            const get_stamps = () => fetch(`${stamp_json}`).then((response) => response.json())
+
+            const get_mints = ticker => _.filter(src20s, src20 => src20.tick.toUpperCase() === ticker.toUpperCase() && src20.op === 'mint')
+
+            const get_amount_minted = tick => {
+                const token = _.filter(tokens, token => token.tick.toUpperCase() === tick.toUpperCase())[0]
+
+                const {
+                    stamp: tokenStamp,
+                    max,
+                    lim,
+                } = token
+
+                let total_tokens = 0
+                let amount_of_mints = 0
+                let mint_info = {}
+
+                _.each(get_mints(tick), mint => {
+                    let {
+                        stamp: mintStamp,
+                        amt,
+                        keyburn,
+                        locked,
+                        quantity,
+                    } = mint
+
+                    if(tokenStamp < mintStamp && keyburn && locked && quantity === 0) {
+                        if(_.parseInt(amt) > _.parseInt(lim)) {
+                            amt = _.parseInt(lim)
+                        }
+
+                        if(total_tokens + _.parseInt(amt) <= max) {
+                            amount_of_mints++
+                            total_tokens += _.parseInt(amt)
+                        }
+                    }                   
+                })
+
+                return {
+                    amount_of_mints,
+                    total_tokens
+                }
+            }
+
+            const parse_tokens = () => {
+                _.each(_.filter(src20s, src20 => src20.op === 'deploy'), src20 => {
+                    const {
+                        tick,
+                        max,
+                        lim
+                    } = src20
+
+                    if(!_.filter(tokens, token => token.tick.toUpperCase() === tick.toUpperCase()).length) {
+                        tokens.push(src20)
+                    }
+                })
+            }
+
+            const parse_src20s = stamps => {
+                _.each(stamps, entry => {
+                    try {
+                        const {
+                            creator,
+                            stamp,
+                            cpid,
+                            keyburn,
+                            locked,
+                            quantity,
+                            stamp_base64,
+                        } = entry                    
+                        
+                        const decoded = b64_to_utf8(stamp_base64)
+                        const json = JSON.parse(decoded)
+
+                        if(json.p === 'src-20') {
+                            src20s.push({
+                                ...json,
+                                creator,
+                                cpid,
+                                stamp,
+                                keyburn,
+                                locked,
+                                quantity
+                            })
+                        }
+                    } catch(e) {
+                        // console.log(e)
+                    }
+                })
+            }
+
+            const get_table_html = () => {
+                let html = 
+                    `<table id="tokens" class="table table-striped mb-5">
+                        <thead>
+                            <tr>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">ID</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">Stamp</th>
+                                <th scope="col">Tick</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">Max</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">Lim</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">Mints</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">Total</th>
+                                <th style="text-align: right; padding-right: 50px;" scope="col">%</th>
+                            </tr>
+                        </thead>
+                    <tbody>`
+
+                _.each(tokens, (token, index) => {
+                    const {
+                        stamp,
+                        tick,
+                        max,
+                        lim
+                    } = token
+
+                    const {
+                        amount_of_mints,
+                        total_tokens
+                    } = get_amount_minted(tick)
+
+                    html += 
+                    `<tr>
+                        <td style="text-align: right; padding-right: 20px;">
+                            ${index+1}
+                        </td>
+                        <td style="text-align: right; padding-right: 50px;">
+                            ${formatValue(stamp)}
+                        </td>
+                        <td>
+                            ${tick}
+                        </td>
+                        <td style="text-align: right; padding-right: 50px;">
+                            ${formatValue(max)}
+                        </td>
+                        <td style="text-align: right; padding-right: 50px;">
+                            ${formatValue(lim)}
+                        </td>
+                        <td style="text-align: right; padding-right: 50px;">
+                            ${formatValue(amount_of_mints)}
+                        </td>
+                        <td style="text-align: right; padding-right: 50px;">
+                            ${formatValue(total_tokens)}
+                        </td>
+                        <td style="text-align: right; padding-right: 50px;">
+                            ${formatValue(100 / max * total_tokens, 2)} %
+                        </td>
+                    </tr>`
+                })
+
+                html +=
+                    `</tbody>
+                    </table>`
+                
+                return html    
+            }
+
+            const init = async () => {
+                const stamps = await get_stamps()
+                const stamps_length = stamps.length
+
+                parse_src20s(stamps)
+                parse_tokens()
+
+                result.innerHTML = get_table_html()
+
+                new Tablesort(document.getElementById('tokens'))
+            }
+
+            init()
+        </script>        
+    </body>
+</html>
