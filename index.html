@@ -68,7 +68,12 @@
                     maximumFractionDigits: decimals,
                 }).format(value)
                             
-            const get_stamps = () => fetch(`${stamp_json}`).then((response) => response.json())
+            const get_stamps = () => fetch(`${stamp_json}`).then((response) => response.json()).catch(e => {
+                console.log(e)
+                result.innerHTML = `<div class="alert alert-danger" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Couldn't fetch Stampchain API
+                </div>`
+            })
 
             const get_mints = ticker => _.filter(_.orderBy(src20s, ['tx_index'], ['asc']), src20 => src20.tick.toUpperCase() === ticker.toUpperCase() && src20.op === 'mint')
 
@@ -339,15 +344,17 @@
             }
 
             const init = async () => {
-                src20s = _.orderBy((await get_stamps()), ['tx_index'], ['asc'])
+                let resp = await get_stamps()
 
-                parse_tokens()
+                if(resp) {
+                    src20s = _.orderBy((resp), ['tx_index'], ['asc'])
 
-                result.innerHTML = get_table_html()
+                    parse_tokens()
 
-                new Tablesort(document.getElementById('tokens'))
+                    result.innerHTML = get_table_html()
 
-                get_mints_html('OBI')
+                    new Tablesort(document.getElementById('tokens'))
+                }
             }
 
             init()
