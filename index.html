@@ -9,6 +9,12 @@
 
     <style type="text/css">
         .info-btn { cursor: pointer;}
+        table#tokens thead th { text-decoration: underline; cursor: pointer; }
+        table#tokens thead th[data-sort-method="none"] { text-decoration: none; }
+
+        [aria-sort] { position: relative; }
+        [aria-sort="ascending"]:after { position: absolute; content: "⌄"; display: block; width: 20px; height: 20px; right: 0; top: 0; font-size: 20px; text-align: center; }
+        [aria-sort="descending"]:after { position: absolute; content: "⌃"; display: block; width: 20px; height: 20px; right: 0; top: 12px; font-size: 14px; text-align: center; }
     </style>
 </head>
     <body>
@@ -16,6 +22,14 @@
             <h3 id="header">SRC20 Dashboard</h3>
 
             <hr />
+
+            <div class="alert alert-info" role="alert">
+                <span>
+                    <i class="info-btn bi bi-info-circle-fill"></i>
+                </span>
+                This is an Alpha version and it's possible that the information may not be accurate or updated in real time.
+            </div>
+          
 
             <p>
                 Current conditions:
@@ -32,7 +46,6 @@
 
         <div class="container mb-5">
             <div id="result">
-                <img src="img/loading.gif" title="loading.." style="display: block; margin: 0 auto;"/>
             </div>
         </div>
         
@@ -49,9 +62,9 @@
         <script src="js/tablesort.min.js"></script>
         <script src="js/tablesort.number.min.js"></script>
         <script>
-            // const stamp_json = 'json/src20.json'
-            const stamp_json = 'https://stampchain.io/api/src20'
-
+            let total_stamps = 0
+            let total_pages = 1
+            let stamps = []
             let src20s = []
             let tokens = []
 
@@ -67,15 +80,31 @@
                     minimumFractionDigits: decimals,
                     maximumFractionDigits: decimals,
                 }).format(value)
-                            
-            const get_stamps = () => fetch(`${stamp_json}`).then((response) => response.json()).catch(e => {
-                console.log(e)
+
+            const showLoadingMessage = (text = "loading..") => {
+                result.innerHTML = `<div class="alert alert-info" role="alert">
+                    <span>
+                        <i class="info-btn bi bi-info-circle-fill"></i>
+                    </span> ${text}
+                </div>`
+            }
+
+            const showApiError = () => {
                 result.innerHTML = `<div class="alert alert-danger" role="alert">
                     <i class="bi bi-exclamation-triangle-fill"></i> Couldn't fetch Stampchain API
                 </div>`
+            }
+            
+            const get_src20_count = () => fetch('https://stampchain.io/api/src20?count').then((response) => response.json()).catch(e => {
+                console.log(e)
+                showApiError()
+            })
+            const get_stamps = (page = 1) => fetch(`https://stampchain.io/api/src20?page=${page}`).then((response) => response.json()).catch(e => {
+                console.log(e)
+                showApiError()
             })
 
-            const get_mints = ticker => _.filter(_.orderBy(src20s, ['tx_index'], ['asc']), src20 => src20.tick.toUpperCase() === ticker.toUpperCase() && src20.op === 'mint')
+            const get_mints = ticker => _.filter(_.orderBy(stamps, ['tx_index'], ['asc']), src20 => src20.tick.toUpperCase() === ticker.toUpperCase() && src20.op === 'mint')
 
             const get_amount_minted = tick => {
                 const token = _.filter(tokens, token => token.tick.toUpperCase() === tick.toUpperCase())[0]
@@ -130,9 +159,9 @@
                                 <th style="text-align: right; padding-right: 20px;" scope="col">ID</th>
                                 <th style="text-align: right; padding-right: 20px;" scope="col">Tx index</th>
                                 <th scope="col">Creator</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">Amount</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">Total</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">%</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Amount</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Total</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">%</th>
                             </tr>
                         </thead>
                     <tbody>`
@@ -144,7 +173,7 @@
                                 <th style="text-align: right; padding-right: 20px;" scope="col">ID</th>
                                 <th style="text-align: right; padding-right: 20px;" scope="col">Tx index</th>
                                 <th scope="col">Creator</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">Amount</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Amount</th>
                             </tr>
                         </thead>
                     <tbody>`         
@@ -184,13 +213,13 @@
                                 <td>
                                     ${creator}
                                 </td>
-                                <td style="text-align: right; padding-right: 50px; white-space: nowrap;">
+                                <td style="text-align: right; padding-right: 20px; white-space: nowrap;">
                                     ${newAmount ? `<del>${formatValue(amt)}</del> <i class="bi bi-arrow-right-circle-fill"></i> ${formatValue(newAmount)}` : formatValue(amt)}
                                 </td>
-                                <td style="text-align: right; padding-right: 50px;">
+                                <td style="text-align: right; padding-right: 20px;">
                                     ${formatValue(total_tokens)}
                                 </td>
-                                <td style="text-align: right; padding-right: 50px;">
+                                <td style="text-align: right; padding-right: 20px;">
                                     ${parseFloat(100 / max * total_tokens).toFixed(2)}&nbsp;%
                                 </td>
                             </tr>`
@@ -206,7 +235,7 @@
                                 <td>
                                     ${creator}
                                 </td>
-                                <td style="text-align: right; padding-right: 50px;">
+                                <td style="text-align: right; padding-right: 20px;">
                                     ${formatValue(amt)}
                                 </td>
                             </tr>`
@@ -239,7 +268,7 @@
             }
 
             const parse_tokens = () => {
-                _.each(_.filter(src20s, src20 => src20.op === 'deploy'), src20 => {
+                _.each(_.filter(stamps, src20 => src20.op === 'deploy'), src20 => {
                     const {
                         tick,
                         max,
@@ -258,13 +287,13 @@
                         <thead>
                             <tr>
                                 <th style="text-align: right; padding-right: 20px;" scope="col">ID</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">Stamp</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Stamp</th>
                                 <th scope="col">Tick</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">Lim</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">Mints</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">Total</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">Max</th>
-                                <th style="text-align: right; padding-right: 50px;" scope="col">%</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Lim</th>
+                                <th data-sort-method="none" style="text-align: right; padding-right: 20px;" scope="col">Mints</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Total</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Max</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">%</th>
                             </tr>
                         </thead>
                     <tbody>`
@@ -287,16 +316,16 @@
                         <td style="text-align: right; padding-right: 20px;">
                             ${index+1}
                         </td>
-                        <td style="text-align: right; padding-right: 50px;">
+                        <td style="text-align: right; padding-right: 20px;">
                             ${formatValue(stamp)}
                         </td>
                         <td>
                             ${tick}
                         </td>
-                        <td style="text-align: right; padding-right: 50px;">
+                        <td style="text-align: right; padding-right: 20px;">
                             ${formatValue(lim)}
                         </td>
-                        <td style="text-align: right; padding-right: 50px; white-space: nowrap;">
+                        <td style="text-align: right; padding-right: 20px; white-space: nowrap;">
                             ${formatValue(amount_of_mints)}
                             
                             <span class="text-primary">
@@ -324,13 +353,13 @@
                                 </div>
                             </div>
                         </td>
-                        <td style="text-align: right; padding-right: 50px;">
+                        <td style="text-align: right; padding-right: 20px;">
                             ${formatValue(total_tokens)}
                         </td>
-                        <td style="text-align: right; padding-right: 50px;">
+                        <td style="text-align: right; padding-right: 20px;">
                             ${formatValue(max)}
                         </td>
-                        <td style="text-align: right; padding-right: 50px;">
+                        <td style="text-align: right; padding-right: 20px;">
                             ${formatValue(100 / max * total_tokens, 2)}&nbsp;%
                         </td>
                     </tr>`
@@ -344,17 +373,18 @@
             }
 
             const init = async () => {
-                let resp = await get_stamps()
+                total_stamps = (await get_src20_count()).count
+                total_pages = Math.ceil(total_stamps / 1000)
 
-                if(resp) {
-                    src20s = _.orderBy((resp), ['tx_index'], ['asc'])
-
-                    parse_tokens()
-
-                    result.innerHTML = get_table_html()
-
-                    new Tablesort(document.getElementById('tokens'))
+                for(let i=1; i<=total_pages; i++) {
+                    showLoadingMessage(`Loading page ${i} of ${total_pages}`)
+                    let resp = (await get_stamps(i)).items
+                    stamps = stamps.concat(resp)
                 }
+
+                parse_tokens()
+                result.innerHTML = get_table_html()
+                new Tablesort(document.getElementById('tokens'))
             }
 
             init()
