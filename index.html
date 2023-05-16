@@ -28,17 +28,14 @@
                 <span>
                     <i class="info-btn bi bi-info-circle-fill"></i>
                 </span>
-                This is an Alpha version and it's possible that the information may not be accurate or updated in real time.<br />
-                Stamps with an emoji "tick" like 👽 aren't currently visible because of a decode issue, this will be fixed later on as well as mobile device improvements.
+                This is an Alpha version and it's possible that the information may not be accurate or updated in real time.
             </div>
-          
 
             <p>
                 Current conditions:
                 <ul>
-                    <li>Amounts > 420k fallback to 420k per mint</li>
+                    <li>Amounts greater than mint limit fallback to the mint limit</li>
                     <li>Casing doesn't matter, so KeViN, KEVIN and Kevin are all valid</li>
-                    <li>Stamp has to have: keyburn = true, locked = true, quantity = 0</li>
                     <li>Mints after the deploy are valid, mints before deploy aren't</li>
                 </ul>
             </p>
@@ -74,8 +71,6 @@
             const header = document.querySelector('#header')
             const result = document.querySelector('#result')
 
-            const b64_to_utf8 = str => decodeURIComponent(escape(window.atob(str)))
-
             const formatValue = (value, decimals = 0, style = 'decimal') =>
                 new Intl.NumberFormat('en-US', {
                     style,
@@ -98,22 +93,21 @@
                 </div>`
             }
 
-            const get_stamp_cache = () => fetch('./json/stamp.json').then((response) => response.json()).catch(e => {
+            const get_stamp_cache = () => fetch('./json/src20.json').then((response) => response.json()).catch(e => {
                 console.log(e)
                 showApiError()
             })
 
-            const get_stamp_count = () => fetch('https://stampchain.io/api/stamps?page=1&page_size=1&sort_order=desc').then((response) => response.json()).catch(e => {
+            const get_src20_count = () => fetch('https://stampchain.io/api/src20?count').then((response) => response.json()).catch(e => {
+                console.log(e)
+                showApiError()
+            })
+            const get_stamps = (page = 1) => fetch(`https://stampchain.io/api/src20?page=${page}`).then((response) => response.json()).catch(e => {
                 console.log(e)
                 showApiError()
             })
 
-            const get_stamps = (page = 1) => fetch(`https://stampchain.io/api/stamps?page=${page}`).then((response) => response.json()).catch(e => {
-                console.log(e)
-                showApiError()
-            })
-
-            const get_mints = ticker => _.filter(_.orderBy(src20s, ['stamp'], ['asc']), src20 => src20.tick.toUpperCase() === ticker.toUpperCase() && src20.op === 'mint')
+            const get_mints = (ticker, deployStamp) => _.filter(_.orderBy(stamps, ['stamp'], ['asc']), x => x.tick.toUpperCase() === ticker.toUpperCase() && x.op.toUpperCase() === 'MINT' && x.stamp > deployStamp)
 
             const get_amount_minted = tick => {
                 const token = _.filter(tokens, token => token.tick.toUpperCase() === tick.toUpperCase())[0]
@@ -128,20 +122,27 @@
                 let amount_of_mints = 0
                 let mint_info = {}
 
-                _.each(get_mints(tick), mint => {
+                _.each(get_mints(tick, tokenStamp), mint => {
                     let {
                         stamp: mintStamp,
                         amt,
                     } = mint
+                    let amount =  _.parseInt(amt)
 
                     if(tokenStamp < mintStamp) {
-                        if(_.parseInt(amt) > _.parseInt(lim)) {
-                            amt = _.parseInt(lim)
+                        if(amount > _.parseInt(lim)) {
+                            amount = _.parseInt(lim)
                         }
 
-                        if(total_tokens + _.parseInt(amt) <= max) {
-                            amount_of_mints++
-                            total_tokens += _.parseInt(amt)
+                        if(total_tokens < max) {
+                            if(total_tokens +  amount > max) {
+                                amount = max - total_tokens
+                            }
+
+                            if(total_tokens + amount <= max) {
+                                amount_of_mints++
+                                total_tokens += amount
+                            }
                         }
                     }                   
                 })
@@ -166,7 +167,7 @@
                         <thead>
                             <tr>
                                 <th style="text-align: right; padding-right: 20px;" scope="col">ID</th>
-                                <th style="text-align: right; padding-right: 20px;" scope="col">Tx index</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Stamp</th>
                                 <th scope="col">Creator</th>
                                 <th style="text-align: right; padding-right: 20px;" scope="col">Amount</th>
                                 <th style="text-align: right; padding-right: 20px;" scope="col">Total</th>
@@ -180,7 +181,7 @@
                         <thead>
                             <tr>
                                 <th style="text-align: right; padding-right: 20px;" scope="col">ID</th>
-                                <th style="text-align: right; padding-right: 20px;" scope="col">Tx index</th>
+                                <th style="text-align: right; padding-right: 20px;" scope="col">Stamp</th>
                                 <th scope="col">Creator</th>
                                 <th style="text-align: right; padding-right: 20px;" scope="col">Amount</th>
                             </tr>
@@ -191,7 +192,7 @@
                 let htmlInvalid = ``
                 let total_tokens = 0
 
-                _.each(get_mints(tick), (mint, index) => {
+                _.each(get_mints(tick, tokenStamp), (mint, index) => {
                     const {
                         stamp: mintStamp,
                         op,
@@ -202,22 +203,33 @@
                         p
                     } = mint
 
+                    let amount = _.parseInt(amt)
+                    let limit = _.parseInt(lim)
+
+                    // check if the "MINT" stamp is later than the "DEPLOY" stamp
                     if(tokenStamp < mintStamp) {
                         let newAmount = false
 
-                        if(_.parseInt(amt) > _.parseInt(lim)) {
-                            newAmount = _.parseInt(lim)
+                        // check if the minted amount is greater than the mint limit
+                        if(amount > limit) {
+                            newAmount = limit
+                            amount = newAmount
                         }
 
-                        if(total_tokens + _.parseInt(amt) <= max) {
-                            total_tokens += newAmount ? newAmount : _.parseInt(amt)
+                        if(total_tokens < max && total_tokens + amount > max) {
+                            newAmount = max - total_tokens
+                            amount = newAmount
+                        }
+
+                        if(total_tokens + amount <= max) {
+                            total_tokens += amount
 
                             htmlValid += `<tr>
                                 <td style="text-align: right; padding-right: 20px;">
                                     ${formatValue(index + 1)}
                                 </td>
                                 <td style="text-align: right; padding-right: 20px;">
-                                    ${formatValue(mintStamp)}
+                                    <a href="https://stampchain.io/asset.html?stampNumber=${mintStamp}" target="_blank">${formatValue(mintStamp)}</a>
                                 </td>
                                 <td>
                                     ${creator}
@@ -239,7 +251,7 @@
                                     ${formatValue(index + 1)}
                                 </td>
                                 <td style="text-align: right; padding-right: 20px;">
-                                    ${formatValue(mintStamp)}
+                                    <a href="https://stampchain.io/asset.html?stampNumber=${mintStamp}" target="_blank">${formatValue(mintStamp)}</a>
                                 </td>
                                 <td>
                                     ${creator}
@@ -276,49 +288,16 @@
                 return html
             }
 
-            const parse_src20s = stamps => {
-                _.each(stamps, entry => {
-                    try {
-                        const {
-                            creator,
-                            stamp,
-                            cpid,
-                            keyburn,
-                            locked,
-                            quantity,
-                            stamp_base64,
-                        } = entry                    
-                        
-                        const decoded = b64_to_utf8(stamp_base64)
-                        const json = JSON.parse(decoded)
-
-                        if(json.p === 'src-20') {
-                            src20s.push({
-                                ...json,
-                                creator,
-                                cpid,
-                                stamp,
-                                keyburn,
-                                locked,
-                                quantity
-                            })
-                        }
-                    } catch(e) {
-                        // console.log(e)
-                    }
-                })
-            }
-
             const parse_tokens = () => {
-                _.each(_.filter(src20s, src20 => src20.op === 'deploy'), src20 => {
+                _.each(_.filter(stamps, x => x.op.toUpperCase() === 'DEPLOY'), x => {
                     const {
                         tick,
                         max,
                         lim
-                    } = src20
+                    } = x
 
                     if(!_.filter(tokens, token => token.tick.toUpperCase() === tick.toUpperCase()).length) {
-                        tokens.push(src20)
+                        tokens.push(x)
                     }
                 })
             }
@@ -359,7 +338,7 @@
                             ${index+1}
                         </td>
                         <td style="text-align: right; padding-right: 20px;">
-                            ${formatValue(stamp)}
+                            <a href="https://stampchain.io/asset.html?stampNumber=${stamp}" target="_blank">${formatValue(stamp)}</a>
                         </td>
                         <td>
                             ${tick}
@@ -418,11 +397,12 @@
                 try {
                     showLoadingMessage('Getting stamps from cache')
                     stamp_cache = await get_stamp_cache()
-
+                    
                     console.log(`${formatValue(stamp_cache.length)} stamps in cache, get latest total number of stamps..`)
                     showLoadingMessage('Getting latest number of stamps')
-                    total_stamps = (await get_stamp_count())[0].stamp + 1 // including stamp 0
-
+                    
+                    total_stamps = (await get_src20_count()).count
+                   
                     let stamp_difference = total_stamps - stamp_cache.length
 
                     console.log(`There are ${formatValue(total_stamps)} stamps in total, so we have to get ${formatValue(stamp_difference)} additional stamps from the API`)
@@ -439,7 +419,7 @@
 
                         for(let i=Math.ceil(stamp_cache.length / 1000); i<=total_pages; i++) {
                             showLoadingMessage(`Loading page ${i} of ${total_pages}`)
-                            let resp = (await get_stamps(i))
+                            let resp = (await get_stamps(i)).items
 
                             resp.forEach(item => {
                                 if(_.filter(stamps, x => x.stamp === item.stamp).length) {
@@ -448,23 +428,24 @@
                                     stamps.push(item)
                                 }
                             })
-                            // stamps = stamps.concat(resp)
                         }
                     }
 
                     showLoadingMessage('Building table HTML')
-                    document.querySelector('#header').innerHTML = `SRC-20 Dashboard - synced until stamp ${formatValue(total_stamps)}`
+                    document.querySelector('#header').innerHTML = `SRC-20 Dashboard - ${formatValue(total_stamps)} SRC-20 stamps so far`
 
                     setTimeout(function() {
-                        parse_src20s(stamps)
                         parse_tokens()
                         result.innerHTML = get_table_html()
                         new Tablesort(document.getElementById('tokens'))
                     }, 0)
                 } catch(e) {
-                    showApiError(`<div class="alert alert-danger" role="alert">
-                        <i class="bi bi-exclamation-triangle-fill"></i> There was a problem fetching the data..
-                    </div>`)
+                    console.log(e)
+                    showApiError(
+                        `<div class="alert alert-danger" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill"></i> There was a problem fetching the data..
+                        </div>`
+                    )
                 }
             }
 
