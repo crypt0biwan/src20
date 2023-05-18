@@ -221,7 +221,7 @@
                             amount = newAmount
                         }
 
-                        if(total_tokens + amount <= max) {
+                        if(amount > 0 && total_tokens + amount <= max) {
                             total_tokens += amount
 
                             htmlValid += `<tr>
