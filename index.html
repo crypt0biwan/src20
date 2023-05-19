@@ -246,17 +246,17 @@
                             </tr>`
 
                         } else {
-                            htmlInvalid += `<tr class="text-danger">
-                                <td style="text-align: right; padding-right: 20px;">
+                            htmlInvalid += `<tr>
+                                <td class="text-danger" style="text-align: right; padding-right: 20px;">
                                     ${formatValue(index + 1)}
                                 </td>
-                                <td style="text-align: right; padding-right: 20px;">
+                                <td class="text-danger" style="text-align: right; padding-right: 20px;">
                                     <a href="https://stampchain.io/asset.html?stampNumber=${mintStamp}" target="_blank">${formatValue(mintStamp)}</a>
                                 </td>
-                                <td>
+                                <td class="text-danger">
                                     ${creator}
                                 </td>
-                                <td style="text-align: right; padding-right: 20px;">
+                                <td class="text-danger" style="text-align: right; padding-right: 20px;">
                                     ${formatValue(amt)}
                                 </td>
                             </tr>`
