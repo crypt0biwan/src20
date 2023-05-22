@@ -69,6 +69,7 @@
             let stamps = []
             let src20s = []
             let tokens = []
+            let timestamp = new Date().getTime()
 
             const header = document.querySelector('#header')
             const result = document.querySelector('#result')
@@ -95,7 +96,7 @@
                 </div>`
             }
 
-            const get_stamp_cache = () => fetch('./json/src20.json').then((response) => response.json()).catch(e => {
+            const get_stamp_cache = () => fetch(`./json/src20.json?ts=${timestamp}`).then((response) => response.json()).catch(e => {
                 console.log(e)
                 showApiError()
             })
